@@ -94,9 +94,6 @@ def task1_convert_to_categorical():
     print("="*70)
     
     input_file = "heart-disease-classification.csv"
-    if not os.path.exists(input_file):
-        raise FileNotFoundError(f"Missing required file: {input_file}")
-    
     df = pd.read_csv(input_file)
     print(f"Original dataset shape: {df.shape}")
     print(f"Original columns: {list(df.columns)}")
@@ -142,9 +139,6 @@ def task2_train_classifiers(n_runs=20):
     print("="*70)
     
     data_file = "HeartDiseaseData.csv"
-    if not os.path.exists(data_file):
-        raise FileNotFoundError(f"Missing required file: {data_file}")
-    
     df = pd.read_csv(data_file)
     
     # Identify target column
@@ -193,31 +187,31 @@ def task2_train_classifiers(n_runs=20):
         results['rf_10'].append(accuracy_score(y_test, rf_10.predict(X_test)))
     
     # Print results
-    print("--- Results with min_samples_split = 253 ---")
+    print("min_samples_split = 253")
     print(f"Decision Tree:  Mean = {np.mean(results['dt_253']):.4f}, Std = {np.std(results['dt_253']):.4f}")
     print(f"Random Forest:  Mean = {np.mean(results['rf_253']):.4f}, Std = {np.std(results['rf_253']):.4f}")
     
-    print("\n--- Results with min_samples_split = 10 ---")
+    print("\nmin_samples_split = 10")
     print(f"Decision Tree:  Mean = {np.mean(results['dt_10']):.4f}, Std = {np.std(results['dt_10']):.4f}")
     print(f"Random Forest:  Mean = {np.mean(results['rf_10']):.4f}, Std = {np.std(results['rf_10']):.4f}")
     
-    print("\n--- Analysis ---")
+    print("\n comparision")
     dt_change = np.mean(results['dt_10']) - np.mean(results['dt_253'])
     rf_change = np.mean(results['rf_10']) - np.mean(results['rf_253'])
     print(f"Decision Tree accuracy change (10 vs 253): {dt_change:+.4f}")
     print(f"Random Forest accuracy change (10 vs 253): {rf_change:+.4f}")
     
     if abs(dt_change) > 0.02:
-        print(f" Decision Tree shows SIGNIFICANT change when min_samples_split is reduced")
+        print(f"- Decision Tree shows pretty good change when min_samples_split is reduced")
     else:
-        print(f"- Decision Tree shows MINIMAL change when min_samples_split is reduced")
+        print(f"- Decision Tree shows small change when min_samples_split is reduced")
     
     if abs(rf_change) > 0.02:
-        print(f" Random Forest shows SIGNIFICANT change when min_samples_split is reduced")
+        print(f" Random Forest shows a decent change when min_samples_split is reduced")
     else:
-        print(f" Random Forest shows MINIMAL change when min_samples_split is reduced")
+        print(f"- Random Forest shows small change when min_samples_split is reduced")
     
-    print(f"\n Random Forest outperforms Decision Tree by: "
+    print(f"\n- Random Forest outperforms Decision Tree by: "
           f"{np.mean(results['rf_10']) - np.mean(results['dt_10']):.4f} (with min_samples=10)")
     
     # Save results
@@ -226,7 +220,7 @@ def task2_train_classifiers(n_runs=20):
     log_accuracies("dt_minsplit10", results['dt_10'])
     log_accuracies("rf_minsplit10", results['rf_10'])
     
-    print(f" Saved accuracy logs to outputs/\n")
+    print(f"- Saved logs to outputs directory/\n")
     
     return results
 
@@ -234,28 +228,54 @@ def task2_train_classifiers(n_runs=20):
 # PART 2 — Multiple Classifiers on Diabetes Data
 # ============================================================================
 
-def task3_multiple_classifiers(n_runs=20):
-    """
+def task3_multiple_classifiers(n_runs=20, use_subset=False, subset_size=10000, svm_kernel='linear'): #use subset false will use full sample 100k 
+                                                                                                  #set to true to use sub set of it to make faster
+    """                                                                                           
     Task 3: Train kNN, Naive Bayes, Logistic Regression, and SVM
+    
+        n_runs: Number of iterations with different train/test splits
+        use_subset: If True, use only a subset of data for faster computation
+        svm_kernel: SVM kernel function ('rbf' or 'linear')
+                    'rbf' -  slower due to big sample size of 100k
+                    'linear' sped up the process a lot
     """
-    print("="*70)
+    print("="*69)
     print("TASK 3: Multiple Classifiers on Diabetes Dataset")
-    print("="*70)
+    print("="*61)
     
     data_file = "DiabetesData.csv"
-    if not os.path.exists(data_file):
-        raise FileNotFoundError(f"Missing required file: {data_file}")
     
+    
+    print(f"Loading dataset from {data_file}...")
     df = pd.read_csv(data_file)
-    print(f"Dataset shape: {df.shape}")
+    print(f"- Dataset loaded successfully")
+    print(f"  Original shape: {df.shape}")
+    
+    #using subset for sample size logic
+    if use_subset and len(df) > subset_size:
+        print(f"\nDataset has {len(df)} samples.")
+        print(f"  Using random subset of {subset_size} samples for faster computation.")
+        print(f"  use_subset=False to use full dataset.")
+        df = df.sample(n=subset_size, random_state=RANDOM_SEED)
+        print(f"- Subset created. New shape: {df.shape}")
+    elif len(df) > 50000:
+        print(f"\nLarge dataset ({len(df)} samples).")
+        print(f"  SVM training may take long time using the whole 100k sample size")
+       
+    
+    print(f"  Columns: {list(df.columns)}")
     
     # Identify target column
     target = "Outcome" if "Outcome" in df.columns else df.columns[-1]
+    print(f"  Target column: {target}")
+    
     X = df.drop(columns=[target])
     y = df[target]
     
+    print(f"\nEncoding categorical features...")
     # Encode if needed
     X_enc, _ = encode_categoricals(X)
+    print(f"- Encoding complete. Feature shape: {X_enc.shape}")
     
     # Storage for results
     knn_results = {k: [] for k in range(3, 21)}
@@ -264,48 +284,83 @@ def task3_multiple_classifiers(n_runs=20):
     lr_results = []
     svm_results = []
     
-    print(f"\nRunning {n_runs} iterations with 75/25 train/test split...\n")
+    # Display SVM configuration
+    print(f"\n{'='*70}")
+    print(f"SVM Configuration: kernel='{svm_kernel}', C=1.0")
+    if svm_kernel == 'rbf':
+        print("  Using RBF kernel")
+    else:
+        print("  Using Linear kernel")
+    print(f"{'='*70}")
+    
+    print(f"\nRunning {n_runs} iterations with 75/25 train/test split...")
+    print("SVM training may take aawhile  on large datasets...\n")
     
     for i in range(n_runs):
+        print(f"{'='*70}")
+        print(f"Run {i+1}/{n_runs}")
+        print(f"{'='*70}")
+        
         # 75/25 split as specified (test_size=0.25)
         X_train, X_test, y_train, y_test = train_test_split(
             X_enc, y, test_size=0.25, random_state=RANDOM_SEED + i
         )
+        print(f"  Train size: {X_train.shape[0]}, Test size: {X_test.shape[0]}")
         
         # Normalize for distance-based methods
+        print(f"  Normalizing features...", end=' ')
         X_train_mean = X_train.mean()
         X_train_std = X_train.std() + 1e-8
         X_train_norm = (X_train - X_train_mean) / X_train_std
         X_test_norm = (X_test - X_train_mean) / X_train_std
+        print("-")
         
         # kNN with k from 3 to 20
+        print(f"  Training kNN (k=3 to 20)...", end=' ')
         for k in range(3, 21):
             knn = KNeighborsClassifier(n_neighbors=k)
             knn.fit(X_train_norm, y_train)
             acc = accuracy_score(y_test, knn.predict(X_test_norm))
             knn_results[k].append(acc)
+        print("-")
         
         # Naive Bayes - Gaussian
+        print(f"  Training Naive Bayes (Gaussian)...", end=' ')
         gnb = GaussianNB()
         gnb.fit(X_train, y_train)
         nb_gaussian.append(accuracy_score(y_test, gnb.predict(X_test)))
+        print("-")
         
         # Naive Bayes - Multinomial (requires non-negative features)
+        print(f"  Training Naive Bayes (Multinomial)...", end=' ')
         X_train_pos = X_train - X_train.min() + 1
         X_test_pos = X_test - X_train.min() + 1
         mnb = MultinomialNB()
         mnb.fit(X_train_pos, y_train)
         nb_multinomial.append(accuracy_score(y_test, mnb.predict(X_test_pos)))
+        print("-")
         
         # Logistic Regression
+        print(f"  Training Logistic Regression...", end=' ')
         lr = LogisticRegression(max_iter=2000, random_state=RANDOM_SEED + i)
         lr.fit(X_train_norm, y_train)
         lr_results.append(accuracy_score(y_test, lr.predict(X_test_norm)))
+        print("-")
         
-        # SVM with RBF kernel
-        svm = SVC(kernel='rbf', C=1.0, gamma='scale', random_state=RANDOM_SEED + i)
+        print(f"  Training SVM ({svm_kernel} kernel)...", end=' ')
+        import sys
+        sys.stdout.flush() 
+        if svm_kernel == 'rbf':
+            svm = SVC(kernel='rbf', C=1.0, gamma='scale', random_state=RANDOM_SEED + i, max_iter=1000)
+        else:
+            svm = SVC(kernel='linear', C=1.0, random_state=RANDOM_SEED + i, max_iter=1000)
         svm.fit(X_train_norm, y_train)
         svm_results.append(accuracy_score(y_test, svm.predict(X_test_norm)))
+        print("-")
+    
+    print(f"\n{'='*70}")
+    print(f"All {n_runs} runs complete!")
+    print(f"{'='*70}\n")
     
     # Print results
     print("--- kNN Results (Average Test Accuracy for each k) ---")
@@ -322,7 +377,7 @@ def task3_multiple_classifiers(n_runs=20):
     print(f"\n--- Logistic Regression ---")
     print(f"Average Test Accuracy: {np.mean(lr_results):.4f}")
     
-    print(f"\n--- SVM (RBF kernel, C=1.0, gamma='scale') ---")
+    print(f"\n--- SVM ({svm_kernel.upper()} kernel, C=1.0) ---")
     print(f"Average Test Accuracy: {np.mean(svm_results):.4f}")
     
     # Plot kNN vs k
@@ -331,14 +386,14 @@ def task3_multiple_classifiers(n_runs=20):
                   "k (Number of Neighbors)", 
                   "Average Test Accuracy", 
                   "knn_vs_k.png")
-    print(f"\n Saved kNN plot to outputs/knn_vs_k.png")
+    print(f"\n- Saved kNN plot to outputs/knn_vs_k.png")
     
     # Save results
     log_accuracies("nb_gaussian", nb_gaussian)
     log_accuracies("nb_multinomial", nb_multinomial)
     log_accuracies("logreg", lr_results)
     log_accuracies("svm", svm_results)
-    print(f" Saved accuracy logs to outputs/\n")
+    print(f"- Saved accuracy logs to outputs/\n")
     
     return {
         'knn': knn_results,
@@ -357,8 +412,6 @@ def task4_feature_selection(m_values=[3, 7], n_models=100):
     print("="*70)
     
     data_file = "DiabetesData.csv"
-    if not os.path.exists(data_file):
-        raise FileNotFoundError(f"Missing required file: {data_file}")
     
     df = pd.read_csv(data_file)
     
@@ -373,7 +426,7 @@ def task4_feature_selection(m_values=[3, 7], n_models=100):
     n_features = len(feature_names)
     
     print(f"Total features available: {n_features}")
-    print(f"Testing with m = {m_values}\n")
+    print(f"Testing with m = {m_values}\n")   # modle stits training here for a long time???
     
     # Single train/test split for this task
     X_train, X_test, y_train, y_test = train_test_split(
@@ -493,18 +546,16 @@ def task4_feature_selection(m_values=[3, 7], n_models=100):
         
         plt.tight_layout()
         plt.savefig(OUTPUT_DIR / f'feature_selection_m{m}_histogram.png', dpi=300)
-        print(f"\n Histogram saved to outputs/feature_selection_m{m}_histogram.png")
+        print(f"\n- Histogram saved to outputs/feature_selection_m{m}_histogram.png")
         
         # Save best features
         for clf_name, (acc, features) in best_acc.items():
             df_best = pd.DataFrame({'feature': features, 'accuracy': [acc] * len(features)})
             df_best.to_csv(OUTPUT_DIR / f'best_features_m{m}_{clf_name}.csv', index=False)
         
-        print(f" Best feature subsets saved to outputs/\n")
+        print(f"- Best feature subsets saved to outputs/\n")
 
-# ============================================================================
-# MAIN EXECUTION
-# ============================================================================
+#Main Exc
 
 def main():
     print("\n" + "="*70)
@@ -516,7 +567,14 @@ def main():
     task2_train_classifiers(n_runs=20)
     
     # PART 2
-    task3_multiple_classifiers(n_runs=20)
+    # Set use_subset=False to use full dataset
+    #  Set to True to use subset of full data set for faster Testing
+    # SVM Kernel- can be changed from linear to rbf for better score. But take very long time
+    #   svm_kernel='linear'
+    #   svm_kernel='rbf'    
+    
+   
+    task3_multiple_classifiers(n_runs=20, use_subset=False, subset_size=10000, svm_kernel='linear') #using linear for faster testing RBF was taking to long
     task4_feature_selection(m_values=[3, 7], n_models=100)
     
     print("\n" + "="*70)
